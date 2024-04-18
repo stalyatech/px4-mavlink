@@ -76,12 +76,14 @@ class MAVXML(object):
             for command in mav_commands:
                 self.commands.append(MAVCommand(command))
 
+
+
     def getMarkdown(self):
         """Generate Markdown for this XML file"""
         markdownText = ""
 
         # Generate include files docs
-        markdownText+="**MAVLink Include Files:"
+        markdownText+="**MAVLink Include Files:**"
         if self.includes:
            base_path = '../messages/'
            # Create a list of formatted strings
@@ -130,7 +132,7 @@ class MAVDeprecated(object):
         return message
 
     def debug(self):
-        print(f"debug:Deprecated: since({self.since}), replaced_by({self.replaced_by}), description({self.description})")
+        print(f"debug:Deprecated: since({self.since}), replaced_by({fix_add_implicit_links_items(self.replaced_by)}), description({self.description})")
 
 class MAVWip(object):
     def __init__(self, soup):
@@ -199,6 +201,7 @@ class MAVMessage(object):
         if len(self.description)==1:
             self.description=self.description[0]
             self.description=tidyDescription(self.description)
+            self.description = fix_add_implicit_links_items(self.description)
         else:
             print(f"DEBUG: message desc multiple array problem: {self.name}")
 
@@ -244,17 +247,17 @@ class MAVMessage(object):
         message+=pattern
 
         for field in self.fields:
-          message+=f"{field.name} | {field.type}"
+          message+=f"{field.name} | `{field.type}`"
 
           if 'units' in self.fieldnames:
             message+=f" | {field.units if field.units else ''}"
           if 'enum' in self.fieldnames:
-            message+=f" | {field.enum if field.enum else ''}"
-          message+=f" | {field.description}\n"
+            message+=f" | {fix_add_implicit_links_items(field.enum) if field.enum else ''}"
+            #markdownText = fix_add_implicit_links_items(field.enum)
+          message+=f" | {fix_add_implicit_links_items(field.description)}\n"
+          
         message+="\n"         
-
         return message
-
         
     def debug(self):
         print(f"debug:message: name({self.name}, id({self.id}), description({self.description}), deprecated({self.deprecated})")
@@ -274,7 +277,7 @@ class MAVEnumEntry(object):
         """Return markdown for an enum entry"""
         if self.deprecated: print(f"TODO: DEP in Enum Entry: {self.name}")
         if self.wip: print(f"TODO: DEP in Enum Entry: {self.name}")
-        string = f"{self.name} | {self.value} | {self.description}\n"
+        string = f"<a id='{self.name}'></a>[{self.name}](#{self.name}) | {self.value} | {fix_add_implicit_links_items(self.description)}\n"
         return string
 
 
@@ -302,7 +305,7 @@ class MAVEnum(object):
             string+=self.wip.getMarkdown() + "\n\n"
         
         string += "(Bitmask) " if {self.bitmask} else ""
-        string += f"{self.description}" if {self.description} else ""
+        string += f"{fix_add_implicit_links_items(self.description)}" if {self.description} else ""
         if self.bitmask or self.description: string += "\n\n"
         string += "Value | Field Name | Description\n--- | --- | ---\n"
         for entry in self.entries:
@@ -362,7 +365,7 @@ class MAVCommand(object):
         if self.wip:
             string+=self.wip.getMarkdown() + "\n\n"
 
-        string += f"{self.description}\n\n" if {self.description} else ""
+        string += f"{fix_add_implicit_links_items(self.description)}\n\n" if {self.description} else ""
         tableHeadings = []
         tableHeadings.append('Param (Label)')
         tableHeadings.append('Description')
@@ -436,6 +439,26 @@ def tidyDescription(desc_string, type="markdown"):
 
         return new_string.strip()
         
+def fix_add_implicit_links_items(input_text):
+    if not type(input_text) is str:
+        # Its not something we can handle
+        return input_text
+
+    # Makes screaming snake case into anchors (helper method). Special fix for MAV_CMD.
+    # I don't remember this regexp but it appears to work
+    # print("fix_add_implicit_link was called")
+    def make_text_to_link(matchobj):
+        #print("make_entry_to_link was called: %s" % matchobj.group(0))
+        item_string = matchobj.group(2)
+        item_url=item_string
+        if item_string == 'MAV_CMD':
+            item_url='mav_commands'
+        returnString = f"{matchobj.group(1)}[{item_string}](#{item_url}){matchobj.group(3)}"
+        return returnString
+    
+    linked_md=re.sub(r'([\`\(\s,]|^)([A-Z]{2,}(?:_[A-Z0-9]+)+)([\`\)\s\.,:]|$)', make_text_to_link, input_text,flags=re.DOTALL)
+    return linked_md
+
 def generateMarkdownTable(headings, rows):
     """Generates a markdown table from an array containing headings and array containing array for every row."""
     string = ""
