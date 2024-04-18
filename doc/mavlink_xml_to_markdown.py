@@ -156,10 +156,15 @@ class MAVField(object):
         self.type = soup['type']
         #self.name_upper = self.name.upper()
         self.description = soup.contents #may need further processing
-        if len(self.description)==1:
-            self.description=self.description[0]
-        else:
-            print(f"DEBUG: field desc multiple array problem: {self.name}")
+        if not self.description:
+            self.description = None
+            #print(f"DEBUG: field desc not defined: {self.name}")
+        elif len(self.description)==1:
+            self.description=self.description[0] #Expected
+        else :
+            print(f"DEBUG: field desc multiple array problem: {self.name} (len: {len(self.description)} )")
+            for item in self.description:
+                print(f"  DEBUG: {item}")
         self.units = soup.get('units') #may not exist
         self.enum = soup.get('enum') #may not exist
         self.display =  soup.get('display')
@@ -170,7 +175,7 @@ class MAVField(object):
 
         # Tell the message what field types it has - needed for table rendering
         #parent.fieldnames.add('name')
-        #parent.fieldnames.add('type')
+        #parent.fieldnames.add('type')     
         parent.fieldnames.add('description')
         if self.units:
             parent.fieldnames.add('units')
@@ -254,8 +259,8 @@ class MAVMessage(object):
           if 'enum' in self.fieldnames:
             message+=f" | {fix_add_implicit_links_items(field.enum) if field.enum else ''}"
             #markdownText = fix_add_implicit_links_items(field.enum)
-          message+=f" | {fix_add_implicit_links_items(field.description)}\n"
-          
+          message+= f" | {fix_add_implicit_links_items(tidyDescription(field.description,'table'))}\n" if field.description else '| \n'
+
         message+="\n"         
         return message
         
@@ -268,7 +273,7 @@ class MAVEnumEntry(object):
         pass
         self.name = soup['name']
         self.value = soup.get('value') if soup.get('value') else print(f"TODO MISSING VALUE in ENUMentry: {self.name}")
-        self.description = tidyDescription(soup.description.text,'table') if soup.description else None
+        self.description = soup.description.text if soup.description else None
         self.deprecated = MAVDeprecated(soup.deprecated) if soup.deprecated else None
         self.wip = MAVWip(soup.wip) if soup.wip else None
         #self.autovalue = autovalue  # True if value was *not* specified in XML
@@ -277,7 +282,8 @@ class MAVEnumEntry(object):
         """Return markdown for an enum entry"""
         if self.deprecated: print(f"TODO: DEP in Enum Entry: {self.name}")
         if self.wip: print(f"TODO: DEP in Enum Entry: {self.name}")
-        string = f"<a id='{self.name}'></a>[{self.name}](#{self.name}) | {self.value} | {fix_add_implicit_links_items(self.description)}\n"
+        desc = fix_add_implicit_links_items(tidyDescription(self.description,'table')) if self.description else ""
+        string = f"<a id='{self.name}'></a>[{self.name}](#{self.name}) | {self.value} | {desc}\n"
         return string
 
 
