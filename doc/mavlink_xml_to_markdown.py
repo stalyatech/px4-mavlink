@@ -91,7 +91,7 @@ class MAVXML(object):
                markdownText+="\n"
                markdownText+=f"\n- [{include}.xml]({base_path}{include}.md)"
         else:
-            markdownText+="None"
+            markdownText+=" None"
         markdownText+="\n\n"
 
         # Generate dialect and version if present
@@ -127,7 +127,7 @@ class MAVDeprecated(object):
 
     def getMarkdown(self):
         message="**DEPRECATED:**"
-        message+=f" Replaced By {self.replaced_by} " if {self.replaced_by} else ''
+        message+=f" Replaced By {fix_add_implicit_links_items(self.replaced_by)} " if {self.replaced_by} else ''
         message+=f"({self.since})" if {self.since} else ''
         return message
 
