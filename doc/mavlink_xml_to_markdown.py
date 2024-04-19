@@ -393,7 +393,7 @@ class MAVCommand(object):
           if valueHeading:
             valString=" "
             if param.enum:
-                valString=param.enum
+                valString=fix_add_implicit_links_items(param.enum)
             elif param.minValue or param.maxValue or param.increment:
                 if param.minValue: valString+=f"min: {param.minValue}"
                 if param.maxValue: valString+=f" min: {param.maxValue}"
