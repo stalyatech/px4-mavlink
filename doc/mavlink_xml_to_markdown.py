@@ -127,8 +127,8 @@ class MAVDeprecated(object):
 
     def getMarkdown(self):
         message="**DEPRECATED:**"
-        message+=f" Replaced By {fix_add_implicit_links_items(self.replaced_by)} " if {self.replaced_by} else ''
-        message+=f"({self.since})" if {self.since} else ''
+        message+=f" Replaced By {fix_add_implicit_links_items(self.replaced_by)} " if self.replaced_by else ''
+        message+=f"({self.since})" if self.since else ''
         return message
 
     def debug(self):
@@ -212,11 +212,12 @@ class MAVMessage(object):
 
         self.fields = []
         self.fieldnames = set()
+        self.deprecated = soup.findChild('deprecated', recursive=False)
+        self.deprecated = MAVDeprecated(self.deprecated) if self.deprecated else None
+        self.wip = soup.findChild('wip', recursive=False)
+        self.wip = MAVWip(self.wip) if self.wip else None
 
-        self.deprecated = MAVDeprecated(soup.deprecated) if soup.deprecated else None
-        self.wip = MAVWip(soup.wip) if soup.wip else None
-
-        # TODO: ADD something for deprecated, wip, whatever else
+        # TODO: ADD Any other fields of message?
 
         fields = soup.find_all('field')
 
@@ -270,33 +271,38 @@ class MAVMessage(object):
 class MAVEnumEntry(object):
     def __init__(self, soup):
         #name, value, description='', end_marker=False, autovalue=False, origin_file='', origin_line=0, has_location=False
-        pass
         self.name = soup['name']
         self.value = soup.get('value') if soup.get('value') else print(f"TODO MISSING VALUE in ENUMentry: {self.name}")
-        self.description = soup.description.text if soup.description else None
-        self.deprecated = MAVDeprecated(soup.deprecated) if soup.deprecated else None
-        self.wip = MAVWip(soup.wip) if soup.wip else None
+        self.description = soup.findChild('description', recursive=False)
+        self.description = self.description.text if self.description else None
+        self.deprecated = soup.findChild('deprecated', recursive=False)
+        self.deprecated = MAVDeprecated(self.deprecated) if self.deprecated else None
+        self.wip = soup.findChild('wip', recursive=False)
+        self.wip = MAVWip(self.wip) if self.wip else None
         #self.autovalue = autovalue  # True if value was *not* specified in XML
 
     def getMarkdown(self):
         """Return markdown for an enum entry"""
         if self.deprecated: print(f"TODO: DEP in Enum Entry: {self.name}")
-        if self.wip: print(f"TODO: DEP in Enum Entry: {self.name}")
+        if self.wip: print(f"TODO: WIP in Enum Entry: {self.name}")
         desc = fix_add_implicit_links_items(tidyDescription(self.description,'table')) if self.description else ""
-        string = f"<a id='{self.name}'></a>[{self.name}](#{self.name}) | {self.value} | {desc}\n"
+        #string = f"<a id='{self.name}'></a>[{self.name}](#{self.name}) | {self.value} | {desc}\n"
+        string = f"<a id='{self.name}'></a>{self.value} | [{self.name}](#{self.name}) | {desc}\n"
         return string
 
 
 class MAVEnum(object):
     def __init__(self, soup):
-        pass
         #name, linenumber, description='', bitmask=False
-        self.name = soup['name']
+        self.name = soup['name']     
         self.entries = []
-        self.description = tidyDescription(soup.description.text) if soup.description else None
-        self.deprecated = MAVDeprecated(soup.deprecated) if soup.deprecated else None
-        self.wip = MAVWip(soup.wip) if soup.wip else None
-        self.bitmask = soup.get('bitmask') if soup.get('bitmask') else False
+        self.description = soup.findChild('description', recursive=False)
+        self.description = tidyDescription(self.description.text) if self.description else None
+        self.deprecated = soup.findChild('deprecated', recursive=False)
+        self.deprecated = MAVDeprecated(self.deprecated) if self.deprecated else None
+        self.wip = soup.findChild('wip', recursive=False)
+        self.wip = MAVWip(self.wip) if self.wip else None
+        self.bitmask = soup.get('bitmask')
         enumEntries = soup.find_all('entry')
         for entry in enumEntries:
             self.entries.append(MAVEnumEntry(entry))
@@ -310,8 +316,11 @@ class MAVEnum(object):
         if self.wip:
             string+=self.wip.getMarkdown() + "\n\n"
         
-        string += "(Bitmask) " if {self.bitmask} else ""
-        string += f"{fix_add_implicit_links_items(self.description)}" if {self.description} else ""
+        if self.name=="MAV_FRAME":
+            self.debug()
+
+        string += "(Bitmask) " if self.bitmask else ""
+        string += f"{fix_add_implicit_links_items(self.description)}" if self.description else ""
         if self.bitmask or self.description: string += "\n\n"
         string += "Value | Field Name | Description\n--- | --- | ---\n"
         for entry in self.entries:
@@ -319,6 +328,10 @@ class MAVEnum(object):
         string +="\n"
 
         return string
+
+    def debug(self):
+        print(f"debug:MAVEnum: name({self.name}), bitmask({self.bitmask}), deprecated({self.deprecated}) ")
+
 
 class MAVCommandParam(object):
     def __init__(self, soup, parent):
@@ -353,8 +366,10 @@ class MAVCommand(object):
         self.value = soup.get('value') if soup.get('value') else "TODO MISSING VALUE"
         self.description = soup.description.text if soup.description else None
         if self.description: self.description=tidyDescription(self.description)
-        self.deprecated = MAVDeprecated(soup.deprecated) if soup.deprecated else None
-        self.wip = MAVWip(soup.wip) if soup.wip else None
+        self.deprecated = soup.findChild('deprecated', recursive=False)
+        self.deprecated = MAVDeprecated(self.deprecated) if self.deprecated else None
+        self.wip = soup.findChild('wip', recursive=False)
+        self.wip = MAVWip(self.wip) if self.wip else None
         #self.autovalue = autovalue  # True if value was *not* specified in XML
         self.param_fieldnames = set()
         self.params = []
@@ -371,7 +386,7 @@ class MAVCommand(object):
         if self.wip:
             string+=self.wip.getMarkdown() + "\n\n"
 
-        string += f"{fix_add_implicit_links_items(self.description)}\n\n" if {self.description} else ""
+        string += f"{fix_add_implicit_links_items(self.description)}\n\n" if self.description else ""
         tableHeadings = []
         tableHeadings.append('Param (Label)')
         tableHeadings.append('Description')
