@@ -283,11 +283,10 @@ class MAVEnumEntry(object):
 
     def getMarkdown(self):
         """Return markdown for an enum entry"""
-        if self.deprecated: print(f"TODO: DEP in Enum Entry: {self.name}")
+        deprString=f"<b>{self.deprecated.getMarkdown()}" if self.deprecated else ""
         if self.wip: print(f"TODO: WIP in Enum Entry: {self.name}")
         desc = fix_add_implicit_links_items(tidyDescription(self.description,'table')) if self.description else ""
-        #string = f"<a id='{self.name}'></a>[{self.name}](#{self.name}) | {self.value} | {desc}\n"
-        string = f"<a id='{self.name}'></a>{self.value} | [{self.name}](#{self.name}) | {desc}\n"
+        string = f"<a id='{self.name}'></a>{self.value} | [{self.name}](#{self.name}) | {desc}{deprString}\n"
         return string
 
 
@@ -316,8 +315,9 @@ class MAVEnum(object):
         if self.wip:
             string+=self.wip.getMarkdown() + "\n\n"
         
-        if self.name=="MAV_FRAME":
-            self.debug()
+        #if self.name=="MAV_FRAME":
+        #    pass
+        #    self.debug()
 
         string += "(Bitmask) " if self.bitmask else ""
         string += f"{fix_add_implicit_links_items(self.description)}" if self.description else ""
