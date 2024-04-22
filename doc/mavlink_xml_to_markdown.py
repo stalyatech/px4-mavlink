@@ -121,7 +121,7 @@ class MAVDeprecated(object):
         #name, type, print_format, xml, description='', enum='', display='', units='', instance=False
         self.since = soup.get('since')
         self.replaced_by = soup.get('replaced_by')
-        self.description = soup.content
+        self.description = soup.text
 
         #self.debug()
 
@@ -129,6 +129,7 @@ class MAVDeprecated(object):
         message="**DEPRECATED:**"
         message+=f" Replaced By {fix_add_implicit_links_items(self.replaced_by)} " if self.replaced_by else ''
         message+=f"({self.since})" if self.since else ''
+        message+=f" — {self.description})" if self.description else ''
         return message
 
     def debug(self):
