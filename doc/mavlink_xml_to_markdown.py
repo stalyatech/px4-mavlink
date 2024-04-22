@@ -30,9 +30,9 @@ class MAVXML(object):
         if self.basename.lower().endswith(".xml"):
             self.basename = self.basename[:-4]
         self.basename_upper = self.basename.upper()
-        self.messages = []
-        self.enums = []
-        self.commands = []
+        self.messages = {} #dict
+        self.enums = {}
+        self.commands = {}
         self.includes = []
         self.dialect = None
         self.version = None
@@ -59,7 +59,8 @@ class MAVXML(object):
         # Extract messages
         messages = soup.find_all('message')
         for message in messages:
-            self.messages.append(MAVMessage(message))
+            item = MAVMessage(message)
+            self.messages[item.name]=item
 
         # Extact all ENUM except MAV_CMD
         # Define a custom filter function to exclude "MAV_CMD"
@@ -67,16 +68,16 @@ class MAVXML(object):
             return tag.name == 'enum' and tag.get('name') != 'MAV_CMD'
         filtered_enums = soup.find_all(exclude_mav_cmd)
         for enum in filtered_enums:
-            self.enums.append(MAVEnum(enum))
+            item = MAVEnum(enum)
+            self.enums[item.name] = item
 
         # Extract Commands (MAV_CMD)
         mav_cmd_enum = soup.find('enum', attrs={'name': 'MAV_CMD'})
         if mav_cmd_enum:
             mav_commands = mav_cmd_enum.find_all('entry')
             for command in mav_commands:
-                self.commands.append(MAVCommand(command))
-
-
+                item = MAVCommand(command)
+                self.commands[item.name] = item
 
     def getMarkdown(self):
         """Generate Markdown for this XML file"""
@@ -100,17 +101,17 @@ class MAVXML(object):
 
         if len(self.messages):
             markdownText += "## Messages\n\n"     
-        for message in self.messages:
+        for message in self.messages.values():
            markdownText += message.getMarkdown()
 
         if len(self.enums):
             markdownText += "## Enumerated Types\n\n"
-        for enum in self.enums:
+        for enum in self.enums.values():
            markdownText += enum.getMarkdown()
 
         if len(self.commands):
             markdownText += "## Commands (MAV_CMD) {#mav_commands}\n\n"
-        for command in self.commands:
+        for command in self.commands.values():
            markdownText += command.getMarkdown()
 
         return markdownText
