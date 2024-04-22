@@ -139,11 +139,13 @@ class MAVWip(object):
     def __init__(self, soup):
         #<wip/>
         self.wip = soup.name
+        self.description = soup.text
 
         #self.debug()
 
     def getMarkdown(self):
         message="**WORK IN PROGRESS**: Do not use in stable production environments (it may change)."
+        if self.description: print(f"TODO: MAVWIP: desc not printed: {self.name}")
         return message
 
     def debug(self):
