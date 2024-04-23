@@ -21,6 +21,7 @@ import os # for walk
 
 import argparse # for command line parsing
 
+MAXIMUM_INCLUDE_FILE_NESTING = 5
 
 class MAVXML(object):
     '''Represents a MAVLink XML file'''
@@ -59,7 +60,7 @@ class MAVXML(object):
         # Extract messages
         messages = soup.find_all('message')
         for message in messages:
-            item = MAVMessage(message)
+            item = MAVMessage(message,self.basename)
             self.messages[item.name]=item
 
         # Extact all ENUM except MAV_CMD
@@ -68,7 +69,7 @@ class MAVXML(object):
             return tag.name == 'enum' and tag.get('name') != 'MAV_CMD'
         filtered_enums = soup.find_all(exclude_mav_cmd)
         for enum in filtered_enums:
-            item = MAVEnum(enum)
+            item = MAVEnum(enum, self.dialect)
             self.enums[item.name] = item
 
         # Extract Commands (MAV_CMD)
@@ -76,8 +77,53 @@ class MAVXML(object):
         if mav_cmd_enum:
             mav_commands = mav_cmd_enum.find_all('entry')
             for command in mav_commands:
-                item = MAVCommand(command)
+                item = MAVCommand(command, self.dialect)
                 self.commands[item.name] = item
+
+    def mergeIn(self, mergeXML):
+        """Merge a passed file into this file"""
+        #print(f"debug: mergeIn {mergeXML.basename} into {self.basename}")
+        
+        # merge messages
+        for messageName in mergeXML.messages.keys():
+            if messageName in self.messages:
+                #print(f"debug: mergeIn {messageName} already present, skip")
+                continue
+            else:
+                #print(f"debug: mergeIn {messageName} added from {mergeXML.basename}")
+                self.messages[messageName]=mergeXML.messages[messageName]
+
+        # merge commands
+        for commandName in mergeXML.commands.keys():
+            if commandName in self.commands:
+                #print(f"debug: mergeIn {commandName} already present, skip")
+                continue
+            else:
+                #print(f"debug: mergeIn {commandName} added from {mergeXML.basename}")
+                self.commands[commandName]=mergeXML.commands[commandName]
+
+        # merge enums
+        for enumName in mergeXML.enums.keys():
+            if enumName in self.enums:
+                #print(f"TODO need to merge the values: debug: mergeIn {enumName} already present, skip")
+                for enumValue in mergeXML.enums[enumName].entries.keys():
+                    
+                    if enumValue in self.enums[enumName].entries:
+                        #print(f"{enumValue} - skip: already present")
+                        pass
+                    else:
+                        #add value from lower level that hasn't been replaced
+                        self.enums[enumName].entries[enumValue]=mergeXML.enums[enumName].entries[enumValue]
+
+
+
+                continue
+            else:
+                #print(f"debug: mergeIn {enumName} added from {mergeXML.basename}")
+                # Enum is new, so just merge it
+                self.enums[enumName]=mergeXML.enums[enumName]
+
+
 
     def getMarkdown(self):
         """Generate Markdown for this XML file"""
@@ -201,10 +247,11 @@ class MAVField(object):
 
 
 class MAVMessage(object):
-    def __init__(self, soup):
+    def __init__(self, soup, dialect):
         self.name = soup['name']
         self.id=int(soup['id'])
         self.name_lower = self.name.lower()
+        self.dialect = dialect
         #self.linenumber = linenumber
         self.description = soup.description.contents #Will do more processing this.
         if len(self.description)==1:
@@ -241,7 +288,8 @@ class MAVMessage(object):
         if self.wip:
             message+=self.wip.getMarkdown()+"\n\n"
 
-        message+=self.description + '\n\n'
+        #message+=self.description + '\n\n'
+        message+=self.description + f" ({self.dialect})\n\n"  # With dialect test
 
         message+='Field Name | Type'
         field_count = 3 # these two + description
@@ -273,10 +321,11 @@ class MAVMessage(object):
         print(f"debug:message: name({self.name}, id({self.id}), description({self.description}), deprecated({self.deprecated})")
 
 class MAVEnumEntry(object):
-    def __init__(self, soup):
+    def __init__(self, soup, dialect):
         #name, value, description='', end_marker=False, autovalue=False, origin_file='', origin_line=0, has_location=False
         self.name = soup['name']
         self.value = soup.get('value') if soup.get('value') else print(f"TODO MISSING VALUE in ENUMentry: {self.name}")
+        self.dialect = dialect
         self.description = soup.findChild('description', recursive=False)
         self.description = self.description.text if self.description else None
         self.deprecated = soup.findChild('deprecated', recursive=False)
@@ -295,10 +344,11 @@ class MAVEnumEntry(object):
 
 
 class MAVEnum(object):
-    def __init__(self, soup):
+    def __init__(self, soup, dialect):
         #name, linenumber, description='', bitmask=False
         self.name = soup['name']     
-        self.entries = []
+        self.entries = {}
+        self.dialect = dialect
         self.description = soup.findChild('description', recursive=False)
         self.description = tidyDescription(self.description.text) if self.description else None
         self.deprecated = soup.findChild('deprecated', recursive=False)
@@ -308,7 +358,8 @@ class MAVEnum(object):
         self.bitmask = soup.get('bitmask')
         enumEntries = soup.find_all('entry')
         for entry in enumEntries:
-            self.entries.append(MAVEnumEntry(entry))
+            enumVal = MAVEnumEntry(entry, self.dialect)
+            self.entries[enumVal.name]=enumVal
 
     def getMarkdown(self):
         """Return markdown for a whole enum"""
@@ -326,8 +377,8 @@ class MAVEnum(object):
         string += "(Bitmask) " if self.bitmask else ""
         string += f"{fix_add_implicit_links_items(self.description)}" if self.description else ""
         if self.bitmask or self.description: string += "\n\n"
-        string += "Value | Field Name | Description\n--- | --- | ---\n"
-        for entry in self.entries:
+        string += "Value | Name | Description\n--- | --- | ---\n"
+        for entry in self.entries.values():
             string += entry.getMarkdown()
         string +="\n"
 
@@ -363,11 +414,12 @@ class MAVCommandParam(object):
         if self.enum: parent.param_fieldnames.add('enum')
 
 class MAVCommand(object):
-    def __init__(self, soup):
+    def __init__(self, soup, dialect):
         #name, value, description='', end_marker=False, autovalue=False, origin_file='', origin_line=0, has_location=False
         pass
         self.name = soup['name']
         self.value = soup.get('value') if soup.get('value') else "TODO MISSING VALUE"
+        self.dialect = dialect
         self.description = soup.description.text if soup.description else None
         if self.description: self.description=tidyDescription(self.description)
         self.deprecated = soup.findChild('deprecated', recursive=False)
@@ -501,6 +553,153 @@ def generateMarkdownTable(headings, rows):
     return string
 
 
+class XMLFiles(object):
+    def __init__(self, dialect=None,source_dir="."):
+        self.xml_dialects = dict()
+        self.source_dir = source_dir
+        if not dialect: raise ValueError("XMLFiles requires XML dialect name or list of dialect names")    
+        dialectNames = []
+        if isinstance(dialect, list):
+           dialectNames = dialect
+        else:
+            dialectNames.append(dialect)
+
+        for dialect in dialectNames:
+            xmlFileName= f"{self.source_dir}{dialect}.xml"
+            print(f"Importing: {xmlFileName}")
+            xmlParser = MAVXML(xmlFileName)
+            self.xml_dialects[dialect]=xmlParser
+
+        self.expand_includes()
+        self.update_includes() # TODO - make this optional based on the a setting?
+
+    def generateDocs(self,output_dir="."):
+        for xmlfile in self.xml_dialects.values():
+            xmlString=xmlfile.getMarkdown()
+
+            #Create outputdir if it does not exist
+            if not os.path.exists(output_dir): os.makedirs(output_dir)
+
+            #output_file = f"{output_dir}{xmlfile.filename}.md"
+            output_file = f"{output_dir}{xmlfile.basename}.md"
+            with open(output_file, "w", encoding="utf-8") as f:
+                print(f"Generating: {output_file}")
+                f.write(xmlString)
+
+    def expand_includes(self):
+        """Expand includes. Root files already parsed objects in the xml list."""
+
+        def expand_oneiteration():
+            '''takes the list of xml files to process and finds includes which have not already been turned into xml documents added to
+            xml files to process, turns them into xml documents and adds them to the xml files list.
+            Returns false if no more documents were added.
+            '''
+            includeadded = False
+            includes_to_add = set()
+            for name in self.xml_dialects.keys():
+               for incl in self.xml_dialects[name].includes:
+                   #print(incl)
+                   if not incl in self.xml_dialects:
+                       # new include
+                       # print(f"debug: {incl} not in {self.xml_dialects.keys()}")
+                       includes_to_add.add(incl)
+                       includeadded = True
+            for incl in includes_to_add:
+                xmlFileName= f"{self.source_dir}{incl}.xml"
+                print(f"Importing included file: {xmlFileName}")
+                xmlParser = MAVXML(xmlFileName)
+                self.xml_dialects[incl]=xmlParser
+            return includeadded
+
+        for i in range(MAXIMUM_INCLUDE_FILE_NESTING):
+            if not expand_oneiteration():
+                break  
+
+    def update_includes(self):
+        """Update dialects and merge with included files, 
+        starting with the bottom level (files with no or fewer includes).
+        Includes were already found and parsed into xml list in expand_includes().
+        """
+
+        # 1: Mark files that don't have includes as "done"
+        done = []
+        for xmldialect in self.xml_dialects.values():
+            if len(xmldialect.includes) == 0:
+                done.append(xmldialect.basename)
+                #print(f"\nFile with no includes found (ENDPOINT): {xmldialect.basename}"  )
+        if len(done) == 0:
+            print("\nERROR in includes tree, no base found!")
+            exit(1)
+
+        # 2: Update all 'not done' files for which all includes have been done.
+        #    Returns True if any updates were made
+
+
+        def update_oneiteration():
+            initial_done_length = len(done)
+            for xmldialect in self.xml_dialects.values():
+                if xmldialect.basename in done:
+                    #print(f"Debug: {xmldialect.basename}: already done, skip")
+                    continue
+                #check if all its includes were already done
+                all_includes_done = True
+                for i in xmldialect.includes:
+                    if i not in done:
+                        all_includes_done = False
+                        #print(f"debug: {i} not done in {xmldialect.basename}")
+                        break
+                if not all_includes_done:
+                    #print(f"{xmldialect.basename}: not all includes ready, skip")
+                    continue
+
+                #Found file where all includes are done
+                done.append(xmldialect.basename)
+                #print(f"{xmldialect.basename}: all includes ready, add" )
+                #now update it with the facts from all it's includes
+                for i in xmldialect.includes:
+                    # TODO - merge my includes
+                    # get the corresponding XML file:
+                    dialectToMerge = self.xml_dialects[i]
+                    #print(f"debug: merging {dialectToMerge.basename} ({i}) into {xmldialect.basename}")
+                    # check that it matches
+                    # update the merge
+                    xmldialect.mergeIn(dialectToMerge)
+
+
+                    """
+                    fname = os.path.abspath(os.path.join(os.path.dirname(x.filename), i))
+                    #print("  include file %s" % i )
+                    #Find the corresponding x
+                    for ix in xml:
+                        if ix.filename != fname:
+                            continue
+                        #print("    add %s" % ix.filename )
+                        x.message_crcs.update(ix.message_crcs)
+                        x.message_lengths.update(ix.message_lengths)
+                        x.message_min_lengths.update(ix.message_min_lengths)
+                        x.message_flags.update(ix.message_flags)
+                        x.message_target_system_ofs.update(ix.message_target_system_ofs)
+                        x.message_target_component_ofs.update(ix.message_target_component_ofs)
+                        x.message_names.update(ix.message_names)
+                        x.largest_payload = max(x.largest_payload, ix.largest_payload)
+                        break   # WHY DO THIS?
+                        """
+
+            if len(done) == len(self.xml_dialects):
+                return False  # finished
+            if len(done) == initial_done_length:
+                # we've made no progress
+                print("ERROR include tree can't be resolved, no base found!")
+                exit(1)
+            return True
+    
+
+        for i in range(MAXIMUM_INCLUDE_FILE_NESTING):
+            #print("\nITERATION "+str(i))
+            if not update_oneiteration():
+                break         
+
+
 def main():
     parser = argparse.ArgumentParser(description="Markdown Generator for MAVLink Docs from XML")
 
@@ -512,29 +711,21 @@ def main():
     #print(args.input_dialect)
     #print(args.output)
 
-    xml_dialects = [] #The list of dialects to generate markdown for
+    files = None; 
+    #xml_dialects = [] #The list of dialects to generate markdown for
     if args.input_dialect:
-        xml_dialects.append(args.input_dialect) 
+        files=XMLFiles(dialect=args.input_dialect,source_dir=args.source_dir)
     else:
         all_files = os.listdir(args.source_dir)
         xml_dialects = [file[:-4] for file in all_files if file.endswith('.xml')]
+        files=XMLFiles(dialect=xml_dialects, source_dir = args.source_dir)
         #xml_dialects.append(f"{args.source_dir}{args.input_dialect}.xml")
     #print(xml_dialects)
 
-    
-    for dialect in xml_dialects:
-        xmlFileName= f"{args.source_dir}{dialect}.xml"
-        print(f"Processing: {xmlFileName}")
-        xmlParser = MAVXML(xmlFileName)
-        xmlString=xmlParser.getMarkdown()
 
-        #Create outputdir if it does not exist
-        if not os.path.exists(args.output):
-          os.makedirs(args.output)
+    files.generateDocs(args.output)
 
-        output_file = f"{args.output}{dialect}.md"
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(xmlString)
+
 
 if __name__ == "__main__":
     main()
