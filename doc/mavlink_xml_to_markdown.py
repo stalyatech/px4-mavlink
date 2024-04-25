@@ -57,11 +57,16 @@ class MAVXML(object):
         for include in includes:
             self.includes.append(include.text[:-4])
 
-        # Extract messages
+        # Extract and reorder messages
         messages = soup.find_all('message')
         for message in messages:
             item = MAVMessage(message,self.basename)
             self.messages[item.name]=item
+        # reorder messages by id
+        sorted_items = sorted(self.messages.items(), key=lambda item: item[1].id)
+        # Clear the original dictionary and rebuild it with the sorted items
+        self.messages.clear()
+        self.messages.update(sorted_items)
 
         # Extact all ENUM except MAV_CMD
         # Define a custom filter function to exclude "MAV_CMD"
@@ -69,16 +74,35 @@ class MAVXML(object):
             return tag.name == 'enum' and tag.get('name') != 'MAV_CMD'
         filtered_enums = soup.find_all(exclude_mav_cmd)
         for enum in filtered_enums:
-            item = MAVEnum(enum, self.dialect)
+            #print(f"debug: enumTestDalect: {self.basename}")
+            item = MAVEnum(enum, self.basename)
             self.enums[item.name] = item
+        #reorder the enum values
+        for enumName in self.enums.keys():    
+            #reorder the enum values - sort the entries based on the 'value' property
+            mav_enum_entries = self.enums[enumName].entries.values()
+            sorted_entries = sorted(mav_enum_entries, key=lambda entry: entry.value)
+            # Create a new dictionary with the sorted entries
+            sorted_enum_entries = {entry.name: entry for entry in sorted_entries}
+            # Clear the original dictionary and rebuild it with the sorted items
+            self.enums[enumName].entries.clear()
+            self.enums[enumName].entries.update(sorted_enum_entries)
+        
 
-        # Extract Commands (MAV_CMD)
+        # Extract Commands (MAV_CMD) and reorder
         mav_cmd_enum = soup.find('enum', attrs={'name': 'MAV_CMD'})
         if mav_cmd_enum:
             mav_commands = mav_cmd_enum.find_all('entry')
             for command in mav_commands:
-                item = MAVCommand(command, self.dialect)
+                item = MAVCommand(command, self.basename)
                 self.commands[item.name] = item
+        # reorder commands by id
+        # Sort the items of the dictionary based on the id property of the value (second element)
+        sorted_items = sorted(self.commands.items(), key=lambda item: item[1].value)
+        # Clear the original dictionary and rebuild it with the sorted items
+        self.commands.clear()
+        self.commands.update(sorted_items)
+
 
     def mergeIn(self, mergeXML):
         """Merge a passed file into this file"""
@@ -92,6 +116,13 @@ class MAVXML(object):
             else:
                 #print(f"debug: mergeIn {messageName} added from {mergeXML.basename}")
                 self.messages[messageName]=mergeXML.messages[messageName]
+        # reorder messages by id
+        # Sort the items of the dictionary based on the id property of the value (second element)
+        sorted_items = sorted(self.messages.items(), key=lambda item: item[1].id)
+        # Clear the original dictionary and rebuild it with the sorted items
+        self.messages.clear()
+        self.messages.update(sorted_items)
+
 
         # merge commands
         for commandName in mergeXML.commands.keys():
@@ -101,6 +132,12 @@ class MAVXML(object):
             else:
                 #print(f"debug: mergeIn {commandName} added from {mergeXML.basename}")
                 self.commands[commandName]=mergeXML.commands[commandName]
+        # reorder commands by id now imported
+        # Sort the items of the dictionary based on the id property of the value (second element)
+        sorted_items = sorted(self.commands.items(), key=lambda item: item[1].value)
+        # Clear the original dictionary and rebuild it with the sorted items
+        self.commands.clear()
+        self.commands.update(sorted_items)
 
         # merge enums
         for enumName in mergeXML.enums.keys():
@@ -114,10 +151,16 @@ class MAVXML(object):
                     else:
                         #add value from lower level that hasn't been replaced
                         self.enums[enumName].entries[enumValue]=mergeXML.enums[enumName].entries[enumValue]
-
-
-
-                continue
+                
+                #reorder the enum values now imported - sort the entries based on the 'value' property
+                mav_enum_entries = self.enums[enumName].entries.values()
+                sorted_entries = sorted(mav_enum_entries, key=lambda entry: entry.value)
+                # Create a new dictionary with the sorted entries
+                sorted_enum_entries = {entry.name: entry for entry in sorted_entries}
+                # Clear the original dictionary and rebuild it with the sorted items
+                self.enums[enumName].entries.clear()
+                self.enums[enumName].entries.update(sorted_enum_entries)
+                #continue
             else:
                 #print(f"debug: mergeIn {enumName} added from {mergeXML.basename}")
                 # Enum is new, so just merge it
@@ -148,7 +191,7 @@ class MAVXML(object):
         if len(self.messages):
             markdownText += "## Messages\n\n"     
         for message in self.messages.values():
-           markdownText += message.getMarkdown()
+           markdownText += message.getMarkdown(self.basename) #Get markdown assuming base dialect of this XML
 
         if len(self.enums):
             markdownText += "## Enumerated Types\n\n"
@@ -183,10 +226,11 @@ class MAVDeprecated(object):
         print(f"debug:Deprecated: since({self.since}), replaced_by({fix_add_implicit_links_items(self.replaced_by)}), description({self.description})")
 
 class MAVWip(object):
-    def __init__(self, soup):
+    def __init__(self, soup=None):
         #<wip/>
-        self.wip = soup.name
-        self.description = soup.text
+        #self.wip = True
+        self.description = None
+        if soup: self.description = soup.text
 
         #self.debug()
 
@@ -196,7 +240,7 @@ class MAVWip(object):
         return message
 
     def debug(self):
-        print(f"debug:WIP: wip({self.wip})")     
+        print(f"debug:MAVWip: desc({self.description})")  
 
 
 class MAVField(object):
@@ -247,11 +291,11 @@ class MAVField(object):
 
 
 class MAVMessage(object):
-    def __init__(self, soup, dialect):
+    def __init__(self, soup, basename):
         self.name = soup['name']
-        self.id=int(soup['id'])
+        self.id = int(soup['id'])
         self.name_lower = self.name.lower()
-        self.dialect = dialect
+        self.basename = basename
         #self.linenumber = linenumber
         self.description = soup.description.contents #Will do more processing this.
         if len(self.description)==1:
@@ -265,8 +309,11 @@ class MAVMessage(object):
         self.fieldnames = set()
         self.deprecated = soup.findChild('deprecated', recursive=False)
         self.deprecated = MAVDeprecated(self.deprecated) if self.deprecated else None
-        self.wip = soup.findChild('wip', recursive=False)
-        self.wip = MAVWip(self.wip) if self.wip else None
+        if self.basename == 'development':
+            self.wip = MAVWip()
+        else:
+            self.wip = soup.findChild('wip', recursive=False)
+            self.wip = MAVWip(self.wip) if self.wip else None
 
         # TODO: ADD Any other fields of message?
 
@@ -277,19 +324,28 @@ class MAVMessage(object):
 
         #self.debug()
 
-    def getMarkdown(self):
+    def getMarkdown(self, currentDialect):
         """
         Return markdown for a message.
         """
         message=f"### {self.name} ({self.id})" + ' {#' + self.name + '}\n\n'
+
+        if self.basename is not currentDialect:
+            if self.deprecated:
+                message+="Deprecated"
+            elif self.wip:
+                message+="WIP"
+            message+=f"(See {self.basename})\n\n"  # With basename (dialect name) test
+            return message
 
         if self.deprecated:
             message+=self.deprecated.getMarkdown()+"\n\n"
         if self.wip:
             message+=self.wip.getMarkdown()+"\n\n"
 
+
         #message+=self.description + '\n\n'
-        message+=self.description + f" ({self.dialect})\n\n"  # With dialect test
+        message+=self.description + f" ({self.basename})\n\n"  # With dialect test
 
         message+='Field Name | Type'
         field_count = 3 # these two + description
@@ -321,11 +377,11 @@ class MAVMessage(object):
         print(f"debug:message: name({self.name}, id({self.id}), description({self.description}), deprecated({self.deprecated})")
 
 class MAVEnumEntry(object):
-    def __init__(self, soup, dialect):
+    def __init__(self, soup, basename):
         #name, value, description='', end_marker=False, autovalue=False, origin_file='', origin_line=0, has_location=False
         self.name = soup['name']
-        self.value = soup.get('value') if soup.get('value') else print(f"TODO MISSING VALUE in ENUMentry: {self.name}")
-        self.dialect = dialect
+        self.value = int(soup.get('value')) if soup.get('value') else print(f"TODO MISSING VALUE in MAVEnumEntry: {self.name}")
+        self.basename = basename
         self.description = soup.findChild('description', recursive=False)
         self.description = self.description.text if self.description else None
         self.deprecated = soup.findChild('deprecated', recursive=False)
@@ -339,27 +395,32 @@ class MAVEnumEntry(object):
         deprString=f"<b>{self.deprecated.getMarkdown()}" if self.deprecated else ""
         if self.wip: print(f"TODO: WIP in Enum Entry: {self.name}")
         desc = fix_add_implicit_links_items(tidyDescription(self.description,'table')) if self.description else ""
-        string = f"<a id='{self.name}'></a>{self.value} | [{self.name}](#{self.name}) | {desc}{deprString}\n"
+        string = f"<a id='{self.name}'></a>{self.value} | [{self.name}](#{self.name}) | {desc}{deprString} \n"
         return string
 
 
 class MAVEnum(object):
-    def __init__(self, soup, dialect):
+    def __init__(self, soup, basename):
         #name, linenumber, description='', bitmask=False
-        self.name = soup['name']     
+        self.name = soup['name']
         self.entries = {}
-        self.dialect = dialect
+        self.basename = basename
         self.description = soup.findChild('description', recursive=False)
         self.description = tidyDescription(self.description.text) if self.description else None
         self.deprecated = soup.findChild('deprecated', recursive=False)
         self.deprecated = MAVDeprecated(self.deprecated) if self.deprecated else None
-        self.wip = soup.findChild('wip', recursive=False)
-        self.wip = MAVWip(self.wip) if self.wip else None
+        if self.basename == 'development':
+            self.wip = MAVWip()
+        else:
+            self.wip = soup.findChild('wip', recursive=False)
+            self.wip = MAVWip(self.wip) if self.wip else None
         self.bitmask = soup.get('bitmask')
         enumEntries = soup.find_all('entry')
         for entry in enumEntries:
-            enumVal = MAVEnumEntry(entry, self.dialect)
+            enumVal = MAVEnumEntry(entry, self.basename)
             self.entries[enumVal.name]=enumVal
+
+        #self.debug()
 
     def getMarkdown(self):
         """Return markdown for a whole enum"""
@@ -385,14 +446,14 @@ class MAVEnum(object):
         return string
 
     def debug(self):
-        print(f"debug:MAVEnum: name({self.name}), bitmask({self.bitmask}), deprecated({self.deprecated}) ")
+        print(f"debug:MAVEnum: name({self.name}), bitmask({self.bitmask}), deprecated({self.deprecated}), wip({self.wip}), basename({self.basename})")
 
 
 class MAVCommandParam(object):
     def __init__(self, soup, parent):
         #name, value, description='', end_marker=False, autovalue=False, origin_file='', origin_line=0, has_location=False
         pass
-        self.index = soup['index']
+        self.index = int(soup['index'])
         self.label = soup.get('label')
         self.units = soup.get('units')
         self.minValue = soup.get('minValue')
@@ -414,18 +475,21 @@ class MAVCommandParam(object):
         if self.enum: parent.param_fieldnames.add('enum')
 
 class MAVCommand(object):
-    def __init__(self, soup, dialect):
+    def __init__(self, soup, basename):
         #name, value, description='', end_marker=False, autovalue=False, origin_file='', origin_line=0, has_location=False
         pass
         self.name = soup['name']
-        self.value = soup.get('value') if soup.get('value') else "TODO MISSING VALUE"
-        self.dialect = dialect
+        self.value = int(soup.get('value')) if soup.get('value') else "TODO MISSING VALUE"
+        self.basename = basename
         self.description = soup.description.text if soup.description else None
         if self.description: self.description=tidyDescription(self.description)
         self.deprecated = soup.findChild('deprecated', recursive=False)
         self.deprecated = MAVDeprecated(self.deprecated) if self.deprecated else None
-        self.wip = soup.findChild('wip', recursive=False)
-        self.wip = MAVWip(self.wip) if self.wip else None
+        if self.basename == 'development':
+            self.wip = MAVWip()
+        else:
+            self.wip = soup.findChild('wip', recursive=False)
+            self.wip = MAVWip(self.wip) if self.wip else None
         #self.autovalue = autovalue  # True if value was *not* specified in XML
         self.param_fieldnames = set()
         self.params = []
@@ -436,7 +500,7 @@ class MAVCommand(object):
 
     def getMarkdown(self):
         """Return markdown for a command (entry)"""
-        string = f"### {self.name}" + " {#" + f"{self.name}" + "}\n\n"
+        string = f"### {self.name} ({self.value})" + " {#" + f"{self.name}" + "}\n\n"
         if self.deprecated:
             string+=self.deprecated.getMarkdown() + "\n\n"
         if self.wip:
@@ -458,7 +522,7 @@ class MAVCommand(object):
         
         for param in self.params:
           row=[] 
-          row.append(f"{param.index} ({param.label})" if param.label else param.index)
+          row.append(f"{param.index} ({param.label})" if param.label else str(param.index))
           row.append(param.description if param.description else "")
 
           if valueHeading:
@@ -480,8 +544,9 @@ class MAVCommand(object):
         
           tableRows.append(row)
 
-          
-          #print(tableRows)
+        #print("debugtablerows")         
+        #print(tableRows)
+        
         string += generateMarkdownTable(tableHeadings, tableRows)
         string+="\n\n"        
 
@@ -546,9 +611,10 @@ def generateMarkdownTable(headings, rows):
     pattern = ("--- | ") * (field_count - 1) + "---\n"
     string+=pattern
     for row in rows:
+        pattern = " | ".join(row) + "\n"
         #print('debug: ROW:')
         #print(row)
-        pattern = " | ".join(row) + "\n"
+        #print(pattern)
         string+=pattern
     return string
 
