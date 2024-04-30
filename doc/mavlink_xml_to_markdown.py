@@ -467,37 +467,42 @@ class MAVMessage(object):
             message+=self.wip.getMarkdown()+"\n\n"
 
 
-        #message+=self.description + '\n\n'
-        message+=self.description + f" ({self.basename})\n\n"  # With dialect test
+        message+=self.description + '\n\n'
+        #message+=self.description + f" ({self.basename})\n\n"  # With dialect test
 
-        message+='Field Name | Type'
-        field_count = 3 # these two + description
-        if 'units' in self.fieldnames:
-            message+=' | Units'
-            field_count+=1
+
+        # Test code for building this using the table builder
+        # Note, might need to modify for new max/min stuff
+        tableHeadings = []
+        tableHeadings.append('Field Name')
+        tableHeadings.append('Type')
+        valueHeading = False
+        unitsHeading = False
+        if any(field in self.fieldnames for field in ('units',)):
+            valueHeading = True
+            tableHeadings.append('Units')
         if 'enum' in self.fieldnames:
-            message+=' | Values'
-            field_count+=1
-        message+=' | Description\n'
-        # Generate column marker pattern
-        pattern = ("--- | ") * (field_count - 1) + "---\n"
-        message+=pattern
+            unitsHeading = True
+            tableHeadings.append('Values')
+        tableHeadings.append('Description')
 
+        tableRows = []
         for field in self.fields:
-          if field.extension:
-              message+=f"<span class='ext'>{field.name}</span> <a href='#mav2_extension_field'>++</a> |"
-          else:
-              message+=f"{field.name} |"
-          message+=f" `{field.type}`"
+            row=[]
+            row.append(f"<span class='ext'>{field.name}</span> <a href='#mav2_extension_field'>++</a>" if field.extension else f"{field.name}") 
+            row.append(f"`{field.type}`")
+            if 'units' in self.fieldnames:
+                row.append(f"{field.units if field.units else ''}")
+            if 'enum' in self.fieldnames:
+                row.append(f"{fix_add_implicit_links_items(field.enum) if field.enum else ''}")
+            row.append(f"{fix_add_implicit_links_items(tidyDescription(field.description,'table'))}" if field.description else '')
+            tableRows.append(row)
 
-          if 'units' in self.fieldnames:
-            message+=f" | {field.units if field.units else ''}"
-          if 'enum' in self.fieldnames:
-            message+=f" | {fix_add_implicit_links_items(field.enum) if field.enum else ''}"
-            #markdownText = fix_add_implicit_links_items(field.enum)
-          message+= f" | {fix_add_implicit_links_items(tidyDescription(field.description,'table'))}\n" if field.description else '| \n'
-
-        message+="\n"         
+        #print("debugtablerows")         
+        #print(tableRows)
+        
+        message += generateMarkdownTable(tableHeadings, tableRows)
+        message +="\n\n"
         return message
         
     def debug(self):
@@ -805,7 +810,7 @@ def generateMarkdownTable(headings, rows):
     pattern = ("--- | ") * (field_count - 1) + "---\n"
     string+=pattern
     for row in rows:
-        pattern = " | ".join(row) + "\n"
+        pattern = "|".join(f" {elem} " if elem else " " for elem in row) + "\n" #single elements only get one space
         #print('debug: ROW:')
         #print(row)
         #print(pattern)
