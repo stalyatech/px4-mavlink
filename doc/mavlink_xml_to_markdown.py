@@ -283,6 +283,9 @@ This topic is a human-readable form of the XML definition file: [all.xml](https:
 span.ext {
     color: blue;
   }
+span.warning {
+    color: red;
+  }
 </style>
 """
         
@@ -300,11 +303,12 @@ class MAVDeprecated(object):
         #self.debug()
 
     def getMarkdown(self):
-        message="**DEPRECATED:**"
-        message+=f" Replaced By {fix_add_implicit_links_items(self.replaced_by)} " if self.replaced_by else ''
-        message+=f"({self.since})" if self.since else ''
-        message+=f" — {self.description})" if self.description else ''
-        return message
+        markdown="**DEPRECATED:**"
+        markdown+=f" Replaced By {fix_add_implicit_links_items(self.replaced_by)} " if self.replaced_by else ''
+        markdown+=f"({self.since})" if self.since else ''
+        markdown+=f" — {self.description})" if self.description else ''
+        markdown = f'<span class="warning">{markdown.strip()}</span>'
+        return markdown
 
     def debug(self):
         print(f"debug:Deprecated: since({self.since}), replaced_by({fix_add_implicit_links_items(self.replaced_by)}), description({self.description})")
@@ -319,9 +323,10 @@ class MAVWip(object):
         #self.debug()
 
     def getMarkdown(self):
-        message="**WORK IN PROGRESS**: Do not use in stable production environments (it may change)."
         if self.description: print(f"TODO: MAVWIP: desc not printed: {self.name}")
-        return message
+        markdown='**WORK IN PROGRESS**: Do not use in stable production environments (it may change).'
+        markdown = f'<span class="warning">{markdown.strip()}</span>'
+        return markdown
 
     def debug(self):
         print(f"debug:MAVWip: desc({self.description})")  
