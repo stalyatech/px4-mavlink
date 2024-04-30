@@ -277,7 +277,10 @@ This topic is a human-readable form of the XML definition file: [all.xml](https:
         insert_text+="""
 
 <span id="mav2_extension_field"></span>
-> **Note** MAVLink 2 [extension fields](../guide/define_xml_element.md#message_extensions) are displayed in blue.
+
+> **Note**
+> - MAVLink 2 [extension fields](../guide/define_xml_element.md#message_extensions) are displayed in blue.
+> - Entities from dialects are displayed only as headings (with link to original)
 
 <style>
 span.ext {
@@ -403,7 +406,6 @@ class MAVField(object):
     def debug(self):
         print(f"Debug_Field- name ({self.name}), type ({self.type}), desc({self.description}), units({self.units}), display({self.display}), instance({self.instance})")
         # TODO - display, instance, are not output.
-
 
 
 class MAVMessage(object):
