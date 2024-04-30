@@ -384,6 +384,14 @@ class MAVField(object):
             parent.fieldnames.add('print_format')
         if self.instance:
             parent.fieldnames.add('instance')
+        if self.minValue:
+            parent.fieldnames.add('minValue')
+        if self.maxValue:
+            parent.fieldnames.add('minValue')
+        if self.default:
+            parent.fieldnames.add('default')
+        if self.invalid:
+            parent.fieldnames.add('invalid')
 
         #self.debug()
 
@@ -479,23 +487,44 @@ class MAVMessage(object):
         valueHeading = False
         unitsHeading = False
         if any(field in self.fieldnames for field in ('units',)):
-            valueHeading = True
-            tableHeadings.append('Units')
-        if 'enum' in self.fieldnames:
             unitsHeading = True
+            tableHeadings.append('Units')
+        if any(field in self.fieldnames for field in ('enum', 'invalid, maxValue, minValue, default')):
+            valueHeading = True
             tableHeadings.append('Values')
         tableHeadings.append('Description')
 
         tableRows = []
         for field in self.fields:
             row=[]
-            row.append(f"<span class='ext'>{field.name}</span> <a href='#mav2_extension_field'>++</a>" if field.extension else f"{field.name}") 
+            nameText = f"<span class='ext'>{field.name}</span> <a href='#mav2_extension_field'>++</a>" if field.extension else f"{field.name}"
+            row.append(nameText)
             row.append(f"`{field.type}`")
-            if 'units' in self.fieldnames:
+            if unitsHeading:
                 row.append(f"{field.units if field.units else ''}")
-            if 'enum' in self.fieldnames:
-                row.append(f"{fix_add_implicit_links_items(field.enum) if field.enum else ''}")
-            row.append(f"{fix_add_implicit_links_items(tidyDescription(field.description,'table'))}" if field.description else '')
+
+            if valueHeading:  
+                #Values: #invalid, default, minValue, maxValue.
+                values = []
+                invalidText = f'invalid:{field.invalid}' if field.invalid else ''
+                values.append(invalidText)
+                defaultText = f'default:{field.default}' if field.default else ''
+                values.append(defaultText)
+                minValueText = f'min:{field.minValue}' if field.minValue else ''
+                values.append(minValueText)
+                maxValueText = f'max:{field.maxValue}' if field.maxValue else ''
+                values.append(maxValueText)
+                
+                enumText = f"{fix_add_implicit_links_items(field.enum) if field.enum else ''}"
+                values.append(enumText)
+
+                valueText = "".join(f"{elem} " if elem else "" for elem in values) #single elements only get one space
+                row.append(valueText.strip())
+                
+            descriptionText = f"{fix_add_implicit_links_items(tidyDescription(field.description,'table'))}" if field.description else ''
+            instanceText = '<br>Messages with same value are from the same source (instance).' if field.instance else ''
+            descriptionText += instanceText
+            row.append(descriptionText.strip())
             tableRows.append(row)
 
         #print("debugtablerows")         
@@ -810,7 +839,7 @@ def generateMarkdownTable(headings, rows):
     pattern = ("--- | ") * (field_count - 1) + "---\n"
     string+=pattern
     for row in rows:
-        pattern = "|".join(f" {elem} " if elem else " " for elem in row) + "\n" #single elements only get one space
+        pattern = "| ".join(f"{elem} " if elem else "" for elem in row) + "\n" #single elements only get one space
         #print('debug: ROW:')
         #print(row)
         #print(pattern)
