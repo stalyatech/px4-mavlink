@@ -176,21 +176,44 @@ class MAVXML(object):
         intro_text = self.get_top_level_docs(self.basename)
         markdownText +=intro_text
 
+        # Generate dialect and version if present
+        if self.dialect: markdownText+=f"**Protocol dialect:** {self.dialect}\n\n"
+        if self.version: markdownText+=f"**Protocol version:** {self.version}\n\n"
+
         # Generate include files docs
-        markdownText+="**MAVLink Include Files:**"
+        markdownText+="## MAVLink Include Files\n\n"
         if self.includes:
            base_path = '../messages/'
            # Create a list of formatted strings
            for include in self.includes:
-               markdownText+="\n"
-               markdownText+=f"\n- [{include}.xml]({base_path}{include}.md)"
+               #markdownText+="\n"
+               markdownText+=f"- [{include}.xml]({base_path}{include}.md)\n"
         else:
-            markdownText+=" None"
-        markdownText+="\n\n"
+            markdownText+=" None\n"
+        markdownText+="\n"
 
-        # Generate dialect and version if present
-        if self.dialect: markdownText+=f"**Protocol dialect:** {self.dialect}\n\n"
-        if self.version: markdownText+=f"**Protocol version:** {self.version}\n\n"
+        # Get just the messages defined in this file
+        entity_summary = "## Summary\n\nXML entities defined in this file (not included):\n\n"
+        matching_names = [f"[{message.name}](#{message.name})" for message in self.messages.values() if message.basename == self.basename]
+        # Join the matching names with a separator (e.g., comma)
+        result_string = ", ".join(matching_names) if matching_names else 'None'
+        result_string =f"- Messages: {result_string}\n\n"
+        entity_summary +=result_string
+
+        # Get just the enums defined in this file
+        matching_names = [f"[{enum.name}](#{enum.name})" for enum in self.enums.values() if enum.basename == self.basename]
+        result_string = ", ".join(matching_names) if matching_names else 'None'
+        result_string =f"- Enums: {result_string}\n\n"
+        entity_summary +=result_string
+
+        # Get just the commands defined in this file
+        matching_names = [f"[{command.name}](#{command.name})" for command in self.commands.values() if command.basename == self.basename]
+        result_string = ", ".join(matching_names) if matching_names else 'None'
+        result_string =f"- Commands: {result_string}\n\n"
+        entity_summary +=result_string
+
+        entity_summary += "The following sections list all entities in the dialect (both included and defined in this file).\n\n"
+        markdownText += entity_summary
 
         if len(self.messages):
             markdownText += "## Messages\n\n"
@@ -226,7 +249,7 @@ The original definitions are defined in [common.xml](https://github.com/mavlink/
 """
         elif filename == 'minimal':
             insert_text+="""
-# MAVLink Minimal Set
+# MAVLink Minimal Set (minimal.xml)
 
 The MAVLink *minimal* set contains the minimal set of definitions for a viable MAVLink system.
 
@@ -235,6 +258,16 @@ The message set is defined in [minimal.xml](https://github.com/mavlink/mavlink/b
 > **Tip** The minimal set is included (imported into) other xml definition files, including the [MAVLink Common Message Set (common.xml)](minimal.md).
 
 """
+        elif filename == 'standard':
+            insert_text+="""
+# Dialect: MAVLINK Standard Message Set (standard.xml)
+
+The MAVLink *standard* message set contains *standard* definitions that are managed by the MAVLink project.
+The definitions are those that are expected to be implemented in all flight stacks/ground stations
+AND are likely to be implemented in a compatible way.
+The original definitions are defined in [standard.xml](https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/standard.xml).
+    """
+
         elif filename == 'ardupilotmega':
             insert_text+="""
 # Dialect: ArduPilotMega
@@ -247,13 +280,13 @@ This topic is a human-readable form of the XML definition file: [ardupilotmega.x
     """
         elif filename == 'development':
             insert_text+="""
-    # Dialect: development
+# Dialect: development
 
-    This dialect contains messages that are proposed for inclusion in the [standard set](standard.md), in order to ease development of prototype implementations.
-    They should be considered a 'work in progress' and not included in production builds.
+This dialect contains messages that are proposed for inclusion in the [standard set](standard.md), in order to ease development of prototype implementations.
+They should be considered a 'work in progress' and not included in production builds.
 
-    This topic is a human-readable form of the XML definition file: [development.xml](https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/development.xml).
-    """
+This topic is a human-readable form of the XML definition file: [development.xml](https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/development.xml).
+"""
         elif filename == 'all':
             insert_text+="""
 # Dialect: all
@@ -291,7 +324,7 @@ span.warning {
   }
 </style>
 """
-        
+
         return insert_text
 
 
