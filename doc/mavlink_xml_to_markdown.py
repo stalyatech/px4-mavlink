@@ -193,7 +193,7 @@ class MAVXML(object):
         if self.version: markdownText+=f"**Protocol version:** {self.version}\n\n"
 
         if len(self.messages):
-            markdownText += "## Messages\n\n"     
+            markdownText += "## Messages\n\n"
         for message in self.messages.values():
            markdownText += message.getMarkdown(self.basename) #Get markdown assuming base dialect of this XML
 
@@ -858,7 +858,8 @@ class XMLFiles(object):
     def __init__(self, dialect=None,source_dir="."):
         self.xml_dialects = dict()
         self.source_dir = source_dir
-        if not dialect: raise ValueError("XMLFiles requires XML dialect name or list of dialect names")    
+        if not dialect: raise ValueError("XMLFiles requires XML dialect name or list of dialect names")
+
         dialectNames = []
         if isinstance(dialect, list):
            dialectNames = dialect
@@ -872,7 +873,26 @@ class XMLFiles(object):
             self.xml_dialects[dialect]=xmlParser
 
         self.expand_includes()
-        self.update_includes() # TODO - make this optional based on the a setting?
+        self.update_includes() # TODO - make this optional based on a setting?
+
+
+        """
+        # Build a dialect tree for better rendering of included items
+        # Dict at top level so we can get self.dialectTree['ardupilotmega'] 
+        # and get a tree we can iterate to print the structure
+        # That could be a dict or an array. Probably dict allows more efficiency
+        # Might be better if separate to XMLFiles so accessible from where printed.
+        # Or we can fetch it with a getter.
+        self.dialectTree = {}
+        for dialectName in self.xml_dialects.keys():
+            print(dialectName)
+            if dialectName not in self.dialectTree.keys():
+                includes = self.xml_dialects[dialectName].includes
+                
+                self.dialectTree[dialectName]=set()
+                for dialect in includes:
+                    tempDict = {} # {all: {common {stnadard: {minimal: None}} }, common: {} }        
+        """
 
     def generateDocs(self,output_dir="."):
         for xmlfile in self.xml_dialects.values():
