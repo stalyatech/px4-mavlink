@@ -1,9 +1,9 @@
 #! /usr/bin/python
 
 """
-This script generates markdown files for the MAVLink message definition XML at: 
+This script generates markdown files for the MAVLink message definition XML at:
 https://github.com/mavlink/mavlink/tree/master/message_definitions/v1.0
-  
+
 The files can be imported into a markdown SSG to display the messages as HTML
 
 The script runs on Python 3. The following libraries must be imported: lxml, requests, bs4.
@@ -78,7 +78,7 @@ class MAVXML(object):
             item = MAVEnum(enum, self.basename)
             self.enums[item.name] = item
         #reorder the enum values
-        for enumName in self.enums.keys():    
+        for enumName in self.enums.keys():
             #reorder the enum values - sort the entries based on the 'value' property
             mav_enum_entries = self.enums[enumName].entries.values()
             sorted_entries = sorted(mav_enum_entries, key=lambda entry: entry.value)
@@ -87,7 +87,7 @@ class MAVXML(object):
             # Clear the original dictionary and rebuild it with the sorted items
             self.enums[enumName].entries.clear()
             self.enums[enumName].entries.update(sorted_enum_entries)
-        
+
 
         # Extract Commands (MAV_CMD) and reorder
         mav_cmd_enum = soup.find('enum', attrs={'name': 'MAV_CMD'})
@@ -107,7 +107,7 @@ class MAVXML(object):
     def mergeIn(self, mergeXML):
         """Merge a passed file into this file"""
         #print(f"debug: mergeIn {mergeXML.basename} into {self.basename}")
-        
+
         # merge messages
         for messageName in mergeXML.messages.keys():
             if messageName in self.messages:
@@ -144,14 +144,14 @@ class MAVXML(object):
             if enumName in self.enums:
                 #print(f"TODO need to merge the values: debug: mergeIn {enumName} already present, skip")
                 for enumValue in mergeXML.enums[enumName].entries.keys():
-                    
+
                     if enumValue in self.enums[enumName].entries:
                         #print(f"{enumValue} - skip: already present")
                         pass
                     else:
                         #add value from lower level that hasn't been replaced
                         self.enums[enumName].entries[enumValue]=mergeXML.enums[enumName].entries[enumValue]
-                
+
                 #reorder the enum values now imported - sort the entries based on the 'value' property
                 mav_enum_entries = self.enums[enumName].entries.values()
                 sorted_entries = sorted(mav_enum_entries, key=lambda entry: entry.value)
@@ -301,7 +301,7 @@ This ensure that:
 
 > **Warning** New dialect files in the official repository must be added to **all.xml** and restrict themselves to using ids in their own allocated range.
 A few older dialects are not included because these operate in completely closed networks or because they are only used for tests.
-    
+
 This topic is a human-readable form of the XML definition file: [all.xml](https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/all.xml).
 """
         else:
@@ -365,7 +365,7 @@ class MAVWip(object):
         return markdown
 
     def debug(self):
-        print(f"debug:MAVWip: desc({self.description})")  
+        print(f"debug:MAVWip: desc({self.description})")
 
 
 class MAVField(object):
@@ -413,7 +413,7 @@ class MAVField(object):
 
         # Tell the message what field types it has - needed for table rendering
         #parent.fieldnames.add('name')
-        #parent.fieldnames.add('type')     
+        #parent.fieldnames.add('type')
         parent.fieldnames.add('description')
         if self.units:
             parent.fieldnames.add('units')
@@ -455,7 +455,7 @@ class MAVMessage(object):
         self.fieldnames = set()
         if self.basename == 'development':
             self.wip = MAVWip()
-        
+
         # iterate the fields of our message
         extension = None
         for child in soup.children:
@@ -494,12 +494,12 @@ class MAVMessage(object):
 
         # Add marker after name if there are additions
         if self.basename is not currentDialect or self.deprecated or self.wip: message+=" —"
-        
+
         # From dialect to heading if in dialect
         if self.basename is not currentDialect:
             message+=f" \[from: [{self.basename}](../messages/{self.basename}.md#{self.name})\]"  # With basename (dialect name) test
- 
-        if self.deprecated: 
+
+        if self.deprecated:
             message+=" [DEP]"
         elif self.wip:
             message+=" [WIP]"
@@ -543,7 +543,7 @@ class MAVMessage(object):
             if unitsHeading:
                 row.append(f"{field.units if field.units else ''}")
 
-            if valueHeading:  
+            if valueHeading:
                 #Values: #invalid, default, minValue, maxValue.
                 values = []
                 invalidText = f'invalid:{field.invalid}' if field.invalid else ''
@@ -554,26 +554,26 @@ class MAVMessage(object):
                 values.append(minValueText)
                 maxValueText = f'max:{field.maxValue}' if field.maxValue else ''
                 values.append(maxValueText)
-                
+
                 enumText = f"{fix_add_implicit_links_items(field.enum) if field.enum else ''}"
                 values.append(enumText)
 
                 valueText = "".join(f"{elem} " if elem else "" for elem in values) #single elements only get one space
                 row.append(valueText.strip())
-                
+
             descriptionText = f"{fix_add_implicit_links_items(tidyDescription(field.description,'table'))}" if field.description else ''
             instanceText = '<br>Messages with same value are from the same source (instance).' if field.instance else ''
             descriptionText += instanceText
             row.append(descriptionText.strip())
             tableRows.append(row)
 
-        #print("debugtablerows")         
+        #print("debugtablerows")
         #print(tableRows)
-        
+
         message += generateMarkdownTable(tableHeadings, tableRows)
         message +="\n\n"
         return message
-        
+
     def debug(self):
         print(f"debug:message: name({self.name}, id({self.id}), description({self.description}), deprecated({self.deprecated})")
 
@@ -645,8 +645,8 @@ class MAVEnum(object):
 
         if self.basename is not currentDialect:
             string+=f" \[from: [{self.basename}](../messages/{self.basename}.md#{self.name})\]"  # With basename (dialect name) test
- 
-        if self.deprecated: 
+
+        if self.deprecated:
             string+=" [DEP]"
         elif self.wip:
             string+=" [WIP]"
@@ -661,7 +661,7 @@ class MAVEnum(object):
 
         if self.wip:
             string+=self.wip.getMarkdown() + "\n\n"
-        
+
         #if self.name=="MAV_FRAME":
         #    pass
         #    self.debug()
@@ -755,11 +755,11 @@ class MAVCommand(object):
 
         # Add marker after name if there are additions
         if self.basename is not currentDialect or self.deprecated or self.wip: string+=" —"
-        
+
         # From dialect to heading if in dialect
         if self.basename is not currentDialect:
             string+=f" \[from: [{self.basename}](../messages/{self.basename}.md#{self.name})\]"  # With basename (dialect name) test
-        if self.deprecated: 
+        if self.deprecated:
             string+=" [DEP]"
         elif self.wip:
             string+=" [WIP]"
@@ -768,7 +768,7 @@ class MAVCommand(object):
         #If dialect, that's it. After this is assuming current dialect
         if self.basename is not currentDialect: return string
 
-    
+
         if self.deprecated:
             string+=self.deprecated.getMarkdown() + "\n\n"
         if self.wip:
@@ -787,9 +787,9 @@ class MAVCommand(object):
             unitsHeading = True
             tableHeadings.append('Units')
         tableRows = []
-        
+
         for param in self.params:
-          row=[] 
+          row=[]
           row.append(f"{param.index} ({param.label})" if param.label else str(param.index))
           row.append(param.description if param.description else "")
 
@@ -809,14 +809,14 @@ class MAVCommand(object):
             if param.units:
                unitsString = param.units
             row.append(unitsString)
-        
+
           tableRows.append(row)
 
-        #print("debugtablerows")         
+        #print("debugtablerows")
         #print(tableRows)
-        
+
         string += generateMarkdownTable(tableHeadings, tableRows)
-        string+="\n\n"        
+        string+="\n\n"
 
         return string
 
@@ -839,7 +839,7 @@ def tidyDescription(desc_string, type="markdown"):
         for line in lines[1:]:
             new_string += line.strip() + "\n"
         desc_string=new_string.strip()
-        #print(f"debug3|{desc_string}|")   
+        #print(f"debug3|{desc_string}|")
         return desc_string
     if type=="table":
         lines = desc_string.strip().splitlines()
@@ -848,7 +848,7 @@ def tidyDescription(desc_string, type="markdown"):
         #    new_string += line.strip() + "<br>"
 
         return new_string.strip()
-        
+
 def fix_add_implicit_links_items(input_text):
     if not type(input_text) is str:
         # Its not something we can handle
@@ -865,7 +865,7 @@ def fix_add_implicit_links_items(input_text):
             item_url='mav_commands'
         returnString = f"{matchobj.group(1)}[{item_string}](#{item_url}){matchobj.group(3)}"
         return returnString
-    
+
     linked_md=re.sub(r'([\`\(\s,]|^)([A-Z]{2,}(?:_[A-Z0-9]+)+)([\`\)\s\.,:]|$)', make_text_to_link, input_text,flags=re.DOTALL)
     return linked_md
 
@@ -911,7 +911,7 @@ class XMLFiles(object):
 
         """
         # Build a dialect tree for better rendering of included items
-        # Dict at top level so we can get self.dialectTree['ardupilotmega'] 
+        # Dict at top level so we can get self.dialectTree['ardupilotmega']
         # and get a tree we can iterate to print the structure
         # That could be a dict or an array. Probably dict allows more efficiency
         # Might be better if separate to XMLFiles so accessible from where printed.
@@ -921,10 +921,10 @@ class XMLFiles(object):
             print(dialectName)
             if dialectName not in self.dialectTree.keys():
                 includes = self.xml_dialects[dialectName].includes
-                
+
                 self.dialectTree[dialectName]=set()
                 for dialect in includes:
-                    tempDict = {} # {all: {common {stnadard: {minimal: None}} }, common: {} }        
+                    tempDict = {} # {all: {common {stnadard: {minimal: None}} }, common: {} }
         """
 
     def generateDocs(self,output_dir="."):
@@ -967,10 +967,10 @@ class XMLFiles(object):
 
         for i in range(MAXIMUM_INCLUDE_FILE_NESTING):
             if not expand_oneiteration():
-                break  
+                break
 
     def update_includes(self):
-        """Update dialects and merge with included files, 
+        """Update dialects and merge with included files,
         starting with the bottom level (files with no or fewer includes).
         Includes were already found and parsed into xml list in expand_includes().
         """
@@ -1046,18 +1046,18 @@ class XMLFiles(object):
                 print("ERROR include tree can't be resolved, no base found!")
                 exit(1)
             return True
-    
+
 
         for i in range(MAXIMUM_INCLUDE_FILE_NESTING):
             #print("\nITERATION "+str(i))
             if not update_oneiteration():
-                break         
+                break
 
 
 def main():
     parser = argparse.ArgumentParser(description="Markdown Generator for MAVLink Docs from XML")
 
-    parser.add_argument("-d", "--source_dir", default="../message_definitions/v1.0/", help="Path to XML definition directory")  
+    parser.add_argument("-d", "--source_dir", default="../message_definitions/v1.0/", help="Path to XML definition directory")
     parser.add_argument("-i", "--input_dialect", default = None, help="Name of XML dialect, e.g. 'common' (if not specified, does all dialects)")
     parser.add_argument("-o","--output", default = "./messages/", help="Path to Markdown output directory")
     args = parser.parse_args()
@@ -1065,7 +1065,7 @@ def main():
     #print(args.input_dialect)
     #print(args.output)
 
-    files = None; 
+    files = None;
     #xml_dialects = [] #The list of dialects to generate markdown for
     if args.input_dialect:
         files=XMLFiles(dialect=args.input_dialect,source_dir=args.source_dir)
